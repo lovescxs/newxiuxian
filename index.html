@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修仙世界 - Vue版</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 登录注册界面 -->
+        <div v-if="!isLoggedIn" class="auth-container">
+            <div class="auth-modal">
+                <div class="auth-header">
+                    <h1>🏮 修仙世界 🏮</h1>
+                    <p>踏上仙途，问鼎苍穹</p>
+                </div>
+                
+                <div class="auth-tabs">
+                    <button 
+                        :class="['auth-tab', { active: authMode === 'login' }]"
+                        @click="authMode = 'login'"
+                    >
+                        登录
+                    </button>
+                    <button 
+                        :class="['auth-tab', { active: authMode === 'register' }]"
+                        @click="authMode = 'register'"
+                    >
+                        注册
+                    </button>
+                </div>
+                
+                <form @submit.prevent="authMode === 'login' ? login() : register()" class="auth-form">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input 
+                            type="text" 
+                            v-model="authForm.username" 
+                            placeholder="请输入用户名"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input 
+                            type="password" 
+                            v-model="authForm.password" 
+                            placeholder="请输入密码"
+                            required
+                        >
+                    </div>
+                    
+                    <div v-if="authMode === 'register'" class="form-group">
+                        <label>确认密码</label>
+                        <input 
+                            type="password" 
+                            v-model="authForm.confirmPassword" 
+                            placeholder="请再次输入密码"
+                            required
+                        >
+                    </div>
+                    
+                    <button type="submit" class="auth-submit">
+                        {{ authMode === 'login' ? '登录' : '注册' }}
+                    </button>
+                </form>
+                
+                <div v-if="authError" class="auth-error">
+                    {{ authError }}
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏主界面 -->
+        <div v-if="isLoggedIn" class="game-container">
+            <!-- 顶部状态栏 -->
+            <header class="status-bar">
+                <div class="player-info">
+                    <div class="player-avatar">🧙‍♂️</div>
+                    <div class="player-details">
+                        <h3>{{ currentUser.username }}</h3>
+                        <p>{{ player.realm }} {{ player.level }}层</p>
+                    </div>
+                </div>
+                
+                <div class="status-bars">
+                    <div class="status-item">
+                        <label>生命值</label>
+                        <div class="progress-bar">
+                            <div class="progress-fill hp" :style="{ width: (player.hp / player.maxHp) * 100 + '%' }"></div>
+                            <span class="progress-text">{{ player.hp }}/{{ player.maxHp }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <label>灵力值</label>
+                        <div class="progress-bar">
+                            <div class="progress-fill mp" :style="{ width: (player.mp / player.maxMp) * 100 + '%' }"></div>
+                            <span class="progress-text">{{ player.mp }}/{{ player.maxMp }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-item">
+                        <label>修为</label>
+                        <div class="progress-bar">
+                            <div class="progress-fill exp" :style="{ width: (player.exp / player.maxExp) * 100 + '%' }"></div>
+                            <span class="progress-text">{{ player.exp }}/{{ player.maxExp }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="resources">
+                    <div class="resource-item">
+                        <span class="resource-icon">💰</span>
+                        <span>{{ player.gold }}</span>
+                    </div>
+                    <div class="resource-item">
+                        <span class="resource-icon">💎</span>
+                        <span>{{ player.spiritStones }}</span>
+                    </div>
+                    <div class="resource-item">
+                        <span class="resource-icon">⭐</span>
+                        <span>{{ player.cultivationPoints }}</span>
+                    </div>
+                </div>
+                
+                <div class="user-actions">
+                    <button @click="saveGame" class="save-btn" :disabled="saving">
+                        {{ saving ? '保存中...' : '💾 保存' }}
+                    </button>
+                    <button @click="logout" class="logout-btn">🚪 退出</button>
+                </div>
+            </header>
+            
+            <!-- 主游戏区域 -->
+            <main class="game-main">
+                <!-- 左侧面板 -->
+                <aside class="left-panel">
+                    <div class="panel-tabs">
+                        <button 
+                            v-for="tab in leftTabs" 
+                            :key="tab.id"
+                            :class="['tab-btn', { active: activeLeftTab === tab.id }]"
+                            @click="activeLeftTab = tab.id"
+                        >
+                            {{ tab.icon }} {{ tab.name }}
+                        </button>
+                    </div>
+                    
+                    <!-- 修炼面板 -->
+                    <div v-if="activeLeftTab === 'cultivation'" class="tab-content">
+                        <div class="cultivation-methods">
+                            <div class="method-card">
+                                <h4>🧘 打坐冥想</h4>
+                                <p>基础修炼方式，稳定获得修为</p>
+                                <button 
+                                    @click="startCultivation('meditation')"
+                                    :disabled="isCultivating"
+                                    class="method-btn"
+                                >
+                                    {{ isCultivating && cultivationType === 'meditation' ? '修炼中...' : '开始修炼' }}
+                                </button>
+                            </div>
+                            
+                            <div class="method-card">
+                                <h4>⚡ 阵法修炼</h4>
+                                <p>消耗灵石，快速提升修为</p>
+                                <p class="cost">消耗：1灵石/分钟</p>
+                                <button 
+                                    @click="startCultivation('formation')"
+                                    :disabled="isCultivating || player.spiritStones < 1"
+                                    class="method-btn"
+                                >
+                                    {{ isCultivating && cultivationType === 'formation' ? '修炼中...' : '开始修炼' }}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div v-if="isCultivating" class="cultivation-timer">
+                            <h4>修炼进行中</h4>
+                            <div class="timer">{{ formatTime(cultivationTime) }}</div>
+                            <button @click="stopCultivation" class="stop-btn">停止修炼</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 技能面板 -->
+                    <div v-if="activeLeftTab === 'skills'" class="tab-content">
+                        <div class="skills-grid">
+                            <div 
+                                v-for="(skill, skillName) in player.skills" 
+                                :key="skillName"
+                                :class="['skill-card', { locked: skill.locked }]"
+                            >
+                                <div class="skill-icon">{{ getSkillIcon(skillName) }}</div>
+                                <h4>{{ getSkillName(skillName) }}</h4>
+                                <div class="skill-level">等级: {{ skill.level }}</div>
+                                <button 
+                                    @click="upgradeSkill(skillName)"
+                                    :disabled="skill.locked || player.cultivationPoints < getUpgradeCost(skill.level)"
+                                    class="upgrade-btn"
+                                >
+                                    {{ skill.locked ? '未解锁' : `升级 (${getUpgradeCost(skill.level)}修为)` }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 背包面板 -->
+                    <div v-if="activeLeftTab === 'inventory'" class="tab-content">
+                        <div class="inventory-header">
+                            <h4>背包 ({{ getInventoryCount() }}/50)</h4>
+                        </div>
+                        <div class="inventory-grid">
+                            <div 
+                                v-for="(item, index) in getInventoryItems()" 
+                                :key="index"
+                                class="inventory-slot occupied"
+                                :title="item.name"
+                                @click="useItem(item.name)"
+                            >
+                                <div class="item-icon">{{ getItemIcon(item.name) }}</div>
+                                <div class="item-count">{{ item.count }}</div>
+                            </div>
+                            <div 
+                                v-for="n in (50 - getInventoryCount())" 
+                                :key="'empty-' + n"
+                                class="inventory-slot"
+                            ></div>
+                        </div>
+                    </div>
+                </aside>
+                
+                <!-- 中央内容区 -->
+                <section class="center-content">
+                    <div class="center-tabs">
+                        <button 
+                            v-for="tab in centerTabs" 
+                            :key="tab.id"
+                            :class="['center-tab', { active: activeCenterTab === tab.id }]"
+                            @click="activeCenterTab = tab.id"
+                        >
+                            {{ tab.icon }} {{ tab.name }}
+                        </button>
+                    </div>
+                    
+                    <!-- 探索内容 -->
+                    <div v-if="activeCenterTab === 'adventure'" class="center-panel">
+                        <div class="locations-grid">
+                            <div 
+                                v-for="location in locations" 
+                                :key="location.id"
+                                class="location-card"
+                            >
+                                <div class="location-image">{{ location.icon }}</div>
+                                <h4>{{ location.name }}</h4>
+                                <p>{{ location.description }}</p>
+                                <div class="location-rewards">
+                                    <span>修为: {{ location.baseExp }}</span>
+                                    <span>金币: {{ location.baseGold }}</span>
+                                </div>
+                                <button 
+                                    @click="exploreLocation(location.id)"
+                                    :disabled="exploring"
+                                    class="explore-btn"
+                                >
+                                    {{ exploring ? '探索中...' : '开始探索' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 战斗内容 -->
+                    <div v-if="activeCenterTab === 'battle'" class="center-panel">
+                        <div v-if="!inBattle" class="enemies-grid">
+                            <div 
+                                v-for="enemy in enemies" 
+                                :key="enemy.id"
+                                class="enemy-card"
+                            >
+                                <div class="enemy-avatar">{{ enemy.avatar }}</div>
+                                <h4>{{ enemy.name }}</h4>
+                                <div class="enemy-stats">
+                                    <div>生命: {{ enemy.hp }}</div>
+                                    <div>攻击: {{ enemy.attack }}</div>
+                                    <div>防御: {{ enemy.defense }}</div>
+                                </div>
+                                <div class="enemy-rewards">
+                                    <span>修为: {{ enemy.exp }}</span>
+                                    <span>金币: {{ enemy.gold }}</span>
+                                </div>
+                                <button @click="startBattle(enemy.id)" class="challenge-btn">
+                                    挑战
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 战斗界面 -->
+                        <div v-if="inBattle" class="battle-arena">
+                            <div class="battle-participants">
+                                <div class="participant player">
+                                    <div class="participant-avatar">🧙‍♂️</div>
+                                    <h4>{{ currentUser.username }}</h4>
+                                    <div class="health-bar">
+                                        <div class="health-fill" :style="{ width: (player.hp / player.maxHp) * 100 + '%' }"></div>
+                                        <span>{{ player.hp }}/{{ player.maxHp }}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="vs">VS</div>
+                                
+                                <div class="participant enemy">
+                                    <div class="participant-avatar">{{ currentEnemy.avatar }}</div>
+                                    <h4>{{ currentEnemy.name }}</h4>
+                                    <div class="health-bar">
+                                        <div class="health-fill" :style="{ width: (currentEnemy.hp / currentEnemy.maxHp) * 100 + '%' }"></div>
+                                        <span>{{ currentEnemy.hp }}/{{ currentEnemy.maxHp }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="battle-actions">
+                                <button @click="battleAction('attack')" class="battle-btn">⚔️ 攻击</button>
+                                <button @click="battleAction('skill')" :disabled="player.mp < 10" class="battle-btn">🔥 技能</button>
+                                <button @click="battleAction('heal')" :disabled="player.mp < 8" class="battle-btn">💚 治疗</button>
+                                <button @click="battleAction('defend')" class="battle-btn">🛡️ 防御</button>
+                            </div>
+                            
+                            <div class="battle-log">
+                                <div v-for="(message, index) in battleMessages" :key="index" class="battle-message">
+                                    {{ message }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 商店内容 -->
+                    <div v-if="activeCenterTab === 'shop'" class="center-panel">
+                        <div class="shop-tabs">
+                            <button 
+                                v-for="category in shopCategories" 
+                                :key="category.id"
+                                :class="['shop-tab', { active: activeShopCategory === category.id }]"
+                                @click="activeShopCategory = category.id"
+                            >
+                                {{ category.icon }} {{ category.name }}
+                            </button>
+                        </div>
+                        
+                        <div class="shop-items">
+                            <div 
+                                v-for="item in getShopItems()" 
+                                :key="item.id"
+                                class="shop-item"
+                            >
+                                <div class="item-icon">{{ item.icon }}</div>
+                                <h4>{{ item.name }}</h4>
+                                <p>{{ item.description }}</p>
+                                <div class="item-price">{{ item.price }} 金币</div>
+                                <button 
+                                    @click="buyItem(item)"
+                                    :disabled="player.gold < item.price"
+                                    class="buy-btn"
+                                >
+                                    购买
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- 右侧面板 -->
+                <aside class="right-panel">
+                    <div class="panel-header">
+                        <h4>📜 游戏日志</h4>
+                        <button @click="clearLog" class="clear-btn">清空</button>
+                    </div>
+                    <div class="game-log">
+                        <div v-for="(entry, index) in gameLog" :key="index" class="log-entry">
+                            <span class="log-time">{{ entry.time }}</span>
+                            <span class="log-message">{{ entry.message }}</span>
+                        </div>
+                    </div>
+                </aside>
+            </main>
+        </div>
+        
+        <!-- 通知系统 -->
+        <div class="notifications">
+            <div 
+                v-for="notification in notifications" 
+                :key="notification.id"
+                :class="['notification', notification.type]"
+            >
+                {{ notification.message }}
+            </div>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+</body>
+</html>

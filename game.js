@@ -1,5 +1,5 @@
 // Vue 3 修仙游戏应用
-const { createApp, ref, reactive, computed, onMounted, watch } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 
 createApp({
     setup() {
@@ -18,6 +18,12 @@ createApp({
         const battleMessages = ref([]);
         const notifications = ref([]);
         const gameLog = ref([]);
+        
+        // 新功能状态
+        const alchemyInProgress = ref(false);
+        const alchemyTimeLeft = ref(0);
+        const alchemyDuration = ref(0);
+        const selectedEquipment = ref(null);
         
         // 界面状态
         const activeLeftTab = ref('cultivation');
@@ -67,20 +73,29 @@ createApp({
                 monstersKilled: 0,
                 cultivationTime: 0,
                 battleWins: 0
-            }
+            },
+            // 新增宗门相关属性
+            sect: null,
+            sectContribution: 0,
+            sectLevel: 1
         });
         
         // 游戏数据
         const leftTabs = [
             { id: 'cultivation', name: '修炼', icon: '🧘' },
             { id: 'skills', name: '技能', icon: '⚡' },
-            { id: 'inventory', name: '背包', icon: '🎒' }
+            { id: 'inventory', name: '背包', icon: '🎒' },
+            { id: 'achievements', name: '成就', icon: '🏆' },
+            { id: 'sect', name: '宗门', icon: '🏛️' }
         ];
         
         const centerTabs = [
+            { id: 'log', name: '日志', icon: '📜' },
             { id: 'adventure', name: '探索', icon: '🗺️' },
             { id: 'battle', name: '战斗', icon: '⚔️' },
-            { id: 'shop', name: '商店', icon: '🏪' }
+            { id: 'shop', name: '商店', icon: '🏪' },
+            { id: 'alchemy', name: '炼丹', icon: '🧪' },
+            { id: 'enhance', name: '强化', icon: '⚒️' }
         ];
         
         const locations = [
@@ -176,9 +191,161 @@ createApp({
             materials: [
                 { id: 'herb', name: '草药', icon: '🌿', price: 10, description: '常见的药草' },
                 { id: 'spirit_stone', name: '灵石', icon: '💎', price: 100, description: '蕴含灵力的石头' },
-                { id: 'iron_ore', name: '铁矿', icon: '⛏️', price: 30, description: '用于锻造的铁矿石' }
+                { id: 'iron_ore', name: '铁矿', icon: '⛏️', price: 30, description: '用于锻造的铁矿石' },
+                { id: 'enhance_stone', name: '强化石', icon: '💎', price: 100, description: '用于装备强化的材料' },
+                { id: 'spirit_grass', name: '灵草', icon: '🌿', price: 80, description: '炼丹用的高级药草' },
+                { id: 'fire_lotus', name: '火莲子', icon: '🔥', price: 150, description: '珍贵的炼丹材料' }
             ]
         };
+        
+        // 成就系统
+        const achievements = ref([
+            {
+                id: 'first_level',
+                name: '初入修仙',
+                description: '达到练气期第1层',
+                icon: '🌟',
+                target: 1,
+                current: 0,
+                completed: false,
+                reward: '金币 x100'
+            },
+            {
+                id: 'realm_breakthrough',
+                name: '境界突破',
+                description: '突破到筑基期',
+                icon: '⚡',
+                target: 1,
+                current: 0,
+                completed: false,
+                reward: '修炼速度 +20%'
+            },
+            {
+                id: 'monster_slayer',
+                name: '妖兽杀手',
+                description: '击败100只妖兽',
+                icon: '⚔️',
+                target: 100,
+                current: 0,
+                completed: false,
+                reward: '攻击力 +10'
+            },
+            {
+                id: 'treasure_hunter',
+                name: '寻宝专家',
+                description: '探索50次',
+                icon: '🗺️',
+                target: 50,
+                current: 0,
+                completed: false,
+                reward: '幸运值 +5'
+            },
+            {
+                id: 'alchemist',
+                name: '炼丹师',
+                description: '成功炼制20颗丹药',
+                icon: '🧪',
+                target: 20,
+                current: 0,
+                completed: false,
+                reward: '炼丹成功率 +10%'
+            }
+        ]);
+        
+        // 宗门系统
+        const availableSects = [
+            {
+                id: 'tianshan',
+                name: '天山派',
+                description: '以剑法闻名的正道宗门',
+                icon: '⚔️',
+                bonus: '攻击力 +15%'
+            },
+            {
+                id: 'yaowang',
+                name: '药王谷',
+                description: '精通炼丹的医道宗门',
+                icon: '🧪',
+                bonus: '炼丹成功率 +20%'
+            },
+            {
+                id: 'wudang',
+                name: '武当山',
+                description: '内功深厚的道家宗门',
+                icon: '☯️',
+                bonus: '修炼速度 +25%'
+            },
+            {
+                id: 'emei',
+                name: '峨眉派',
+                description: '防御见长的佛门宗门',
+                icon: '🛡️',
+                bonus: '防御力 +20%'
+            }
+        ];
+        
+        const sectTasks = ref([
+            {
+                id: 'daily_cultivation',
+                name: '日常修炼',
+                description: '修炼2小时',
+                reward: '贡献度 +10',
+                accepted: false,
+                available: true
+            },
+            {
+                id: 'monster_hunt',
+                name: '妖兽狩猎',
+                description: '击败5只妖兽',
+                reward: '贡献度 +20',
+                accepted: false,
+                available: true
+            },
+            {
+                id: 'herb_gathering',
+                name: '采集灵草',
+                description: '收集10株灵草',
+                reward: '贡献度 +15',
+                accepted: false,
+                available: true
+            }
+        ]);
+        
+        // 炼丹系统
+        const alchemyRecipes = [
+            {
+                id: 'healing_pill',
+                name: '回血丹',
+                icon: '💊',
+                materials: [
+                    { name: '灵草', count: 2 }
+                ],
+                result: '回血丹 x3',
+                duration: 30
+            },
+            {
+                id: 'mana_pill',
+                name: '回蓝丹',
+                icon: '🔵',
+                materials: [
+                    { name: '灵草', count: 1 },
+                    { name: '火莲子', count: 1 }
+                ],
+                result: '回蓝丹 x2',
+                duration: 45
+            },
+            {
+                id: 'power_pill',
+                name: '力量丹',
+                icon: '💪',
+                materials: [
+                    { name: '灵草', count: 3 },
+                    { name: '火莲子', count: 2 }
+                ],
+                result: '力量丹 x1',
+                duration: 60
+            }
+        ];
         
         const realms = [
             { name: '练气期', maxLevel: 9, expMultiplier: 1 },
@@ -432,6 +599,9 @@ createApp({
             player.attack += attackIncrease;
             player.defense += defenseIncrease;
             
+            // 更新成就
+            updateAchievement('first_level', player.level);
+            
             // 检查境界突破
             checkRealmBreakthrough();
             
@@ -513,6 +683,9 @@ createApp({
             
             exploring.value = true;
             const location = locations.find(loc => loc.id === locationId);
+            
+            // 更新成就
+            updateAchievement('treasure_hunter');
             
             addLogEntry(`进入${location.name}探索...`);
             
@@ -659,6 +832,9 @@ createApp({
             player.gold += enemy.gold;
             player.stats.battleWins++;
             player.stats.monstersKilled++;
+            
+            // 更新成就
+            updateAchievement('monster_slayer');
             
             // 掉落物品
             if (enemy.drops && enemy.drops.length > 0) {
@@ -832,6 +1008,189 @@ createApp({
             }, 3000);
         };
         
+        // 宗门系统函数
+        const joinSect = (sectId) => {
+            const sect = availableSects.find(s => s.id === sectId);
+            if (sect) {
+                player.sect = sectId;
+                player.sectContribution = 0;
+                player.sectLevel = 1;
+                addLogEntry(`加入了${sect.name}`);
+                showNotification(`成功加入${sect.name}！`, 'success');
+                saveGame();
+            }
+        };
+        
+        const getSectInfo = () => {
+            if (!player.sect) return null;
+            return availableSects.find(s => s.id === player.sect);
+        };
+        
+        const acceptTask = (taskId) => {
+            const task = sectTasks.value.find(t => t.id === taskId);
+            if (task && !task.accepted) {
+                task.accepted = true;
+                addLogEntry(`接受了任务：${task.name}`);
+                showNotification(`接受任务：${task.name}`, 'info');
+            }
+        };
+        
+        // 成就系统函数
+        const updateAchievement = (achievementId, progress = 1) => {
+            const achievement = achievements.value.find(a => a.id === achievementId);
+            if (achievement && !achievement.completed) {
+                achievement.current = Math.min(achievement.current + progress, achievement.target);
+                if (achievement.current >= achievement.target && !achievement.completed) {
+                    achievement.completed = true;
+                    addLogEntry(`获得成就：${achievement.name}`);
+                    showNotification(`获得成就：${achievement.name}！`, 'success');
+                }
+            }
+        };
+        
+        // 炼丹系统函数
+        const canCraftRecipe = (recipe) => {
+            return recipe.materials.every(material => {
+                const count = player.inventory[material.name] || 0;
+                return count >= material.count;
+            });
+        };
+        
+        const startAlchemy = (recipe) => {
+            if (alchemyInProgress.value || !canCraftRecipe(recipe)) {
+                showNotification('无法开始炼丹！', 'error');
+                return;
+            }
+            
+            // 消耗材料
+            recipe.materials.forEach(material => {
+                if (player.inventory[material.name]) {
+                    player.inventory[material.name] -= material.count;
+                    if (player.inventory[material.name] <= 0) {
+                        delete player.inventory[material.name];
+                    }
+                }
+            });
+            
+            alchemyInProgress.value = true;
+            alchemyDuration.value = recipe.duration;
+            alchemyTimeLeft.value = recipe.duration;
+            
+            addLogEntry(`开始炼制${recipe.name}`);
+            showNotification(`开始炼制${recipe.name}`, 'info');
+            
+            const timer = setInterval(() => {
+                alchemyTimeLeft.value--;
+                if (alchemyTimeLeft.value <= 0) {
+                    clearInterval(timer);
+                    completeAlchemy(recipe);
+                }
+            }, 1000);
+        };
+        
+        const completeAlchemy = (recipe) => {
+            alchemyInProgress.value = false;
+            
+            // 成功率计算（基础80%）
+            const successRate = 0.8;
+            const success = Math.random() < successRate;
+            
+            if (success) {
+                // 添加产出物品
+                const resultMatch = recipe.result.match(/(.*) x(\d+)/);
+                if (resultMatch) {
+                    const itemName = resultMatch[1];
+                    const count = parseInt(resultMatch[2]);
+                    if (!player.inventory[itemName]) {
+                        player.inventory[itemName] = 0;
+                    }
+                    player.inventory[itemName] += count;
+                }
+                addLogEntry(`炼制${recipe.name}成功！`);
+                showNotification(`炼制${recipe.name}成功！`, 'success');
+                updateAchievement('alchemist');
+            } else {
+                addLogEntry(`炼制${recipe.name}失败了...`);
+                showNotification(`炼制${recipe.name}失败了...`, 'error');
+            }
+        };
+        
+        // 装备强化系统函数
+        const getEnhanceableEquipment = () => {
+            return Object.values(player.equipment).filter(eq => eq !== null);
+        };
+        
+        const selectEquipment = (equipment) => {
+            selectedEquipment.value = equipment;
+        };
+        
+        const getEnhanceSuccessRate = (equipment) => {
+            const level = equipment.level || 0;
+            return Math.max(30, 90 - level * 5); // 基础90%，每级降低5%
+        };
+        
+        const getEnhanceCost = (equipment) => {
+            const level = equipment.level || 0;
+            return Math.max(1, level + 1);
+        };
+        
+        const getEnhanceGoldCost = (equipment) => {
+             const level = equipment.level || 0;
+             return (level + 1) * 100;
+         };
+         
+         const getEnhancedStats = (equipment) => {
+             const enhanced = {};
+             const level = equipment.level || 0;
+             if (equipment.attack) enhanced.attack = equipment.attack + (level + 1) * 5;
+             if (equipment.defense) enhanced.defense = equipment.defense + (level + 1) * 3;
+             if (equipment.hp) enhanced.hp = equipment.hp + (level + 1) * 10;
+             if (equipment.mp) enhanced.mp = equipment.mp + (level + 1) * 5;
+             return enhanced;
+         };
+         
+         const canEnhanceEquipment = (equipment) => {
+             const cost = getEnhanceCost(equipment);
+             const goldCost = getEnhanceGoldCost(equipment);
+             const hasStone = (player.inventory['强化石'] || 0) >= cost;
+             return hasStone && player.gold >= goldCost;
+         };
+        
+        const enhanceEquipment = (equipment) => {
+            if (!canEnhanceEquipment(equipment)) {
+                showNotification('强化条件不足！', 'error');
+                return;
+            }
+            
+            const cost = getEnhanceCost(equipment);
+            const goldCost = getEnhanceGoldCost(equipment);
+            const successRate = getEnhanceSuccessRate(equipment) / 100;
+            
+            // 消耗材料
+            player.inventory['强化石'] -= cost;
+            if (player.inventory['强化石'] <= 0) {
+                delete player.inventory['强化石'];
+            }
+            
+            player.gold -= goldCost;
+            
+            // 强化判定
+            if (Math.random() < successRate) {
+                equipment.level = (equipment.level || 0) + 1;
+                if (equipment.attack) equipment.attack += 5;
+                if (equipment.defense) equipment.defense += 3;
+                if (equipment.hp) equipment.hp += 10;
+                if (equipment.mp) equipment.mp += 5;
+                addLogEntry(`${equipment.name} 强化成功！等级 +${equipment.level}`);
+                showNotification(`${equipment.name} 强化成功！`, 'success');
+            } else {
+                addLogEntry(`${equipment.name} 强化失败...`);
+                showNotification(`${equipment.name} 强化失败...`, 'error');
+            }
+            
+            saveGame();
+        };
+        
         // 生命周期
         onMounted(() => {
             // 定期恢复灵力
@@ -876,6 +1235,12 @@ createApp({
             notifications,
             gameLog,
             
+            // 新功能状态
+            alchemyInProgress,
+            alchemyTimeLeft,
+            alchemyDuration,
+            selectedEquipment,
+            
             // 界面状态
             activeLeftTab,
             activeCenterTab,
@@ -891,6 +1256,10 @@ createApp({
             locations,
             enemies,
             shopCategories,
+            achievements,
+            availableSects,
+            sectTasks,
+            alchemyRecipes,
             
             // 方法
             login,
@@ -906,6 +1275,22 @@ createApp({
             buyItem,
             useItem,
             clearLog,
+            
+            // 新功能方法
+            joinSect,
+            getSectInfo,
+            acceptTask,
+            updateAchievement,
+            canCraftRecipe,
+            startAlchemy,
+            getEnhanceableEquipment,
+             selectEquipment,
+             getEnhanceSuccessRate,
+             getEnhanceCost,
+             getEnhanceGoldCost,
+             getEnhancedStats,
+             canEnhanceEquipment,
+             enhanceEquipment,
             
             // 工具方法
             formatTime,

@@ -11,6 +11,33 @@ body {
     color: #ffffff;
     min-height: 100vh;
     overflow-x: hidden;
+    position: relative;
+}
+
+/* 添加背景粒子效果 */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+        radial-gradient(2px 2px at 40px 70px, rgba(255,255,255,0.8), transparent),
+        radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+        radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.6), transparent),
+        radial-gradient(2px 2px at 160px 30px, #fff, transparent);
+    background-repeat: repeat;
+    background-size: 200px 100px;
+    animation: sparkle 20s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes sparkle {
+    from { transform: translateY(0px); }
+    to { transform: translateY(-100px); }
 }
 
 #app {
@@ -1015,6 +1042,26 @@ body {
     padding-bottom: 8px;
 }
 
+.log-entry.info {
+    background: rgba(70, 130, 180, 0.2);
+    color: #87CEEB;
+}
+
+.log-entry.success {
+    background: rgba(34, 139, 34, 0.2);
+    color: #90EE90;
+}
+
+.log-entry.warning {
+    background: rgba(255, 165, 0, 0.2);
+    color: #FFD700;
+}
+
+.log-entry.error {
+    background: rgba(220, 20, 60, 0.2);
+    color: #FF6B6B;
+}
+
 .log-time {
     color: #999999;
     font-size: 0.8em;
@@ -1023,6 +1070,435 @@ body {
 
 .log-message {
     color: #cccccc;
+}
+
+/* 成就系统 */
+.achievements-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.achievement-card {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.achievement-card.completed {
+    background: rgba(255, 215, 0, 0.1);
+    border-color: #FFD700;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.achievement-icon {
+    font-size: 24px;
+    margin-right: 15px;
+    min-width: 40px;
+    text-align: center;
+}
+
+.achievement-info {
+    flex: 1;
+}
+
+.achievement-info h4 {
+    margin: 0 0 5px 0;
+    color: #FFD700;
+}
+
+.achievement-info p {
+    margin: 0 0 10px 0;
+    color: #E6E6FA;
+    font-size: 14px;
+}
+
+.achievement-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.achievement-reward {
+    color: #90EE90;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+/* 宗门系统 */
+.sect-selection h4 {
+    text-align: center;
+    color: #FFD700;
+    margin-bottom: 20px;
+}
+
+.sects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 10px;
+}
+
+.sect-card {
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.sect-card:hover {
+    background: rgba(139, 69, 19, 0.2);
+    border-color: #CD853F;
+    transform: translateY(-2px);
+}
+
+.sect-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+.sect-card h5 {
+    color: #FFD700;
+    margin: 10px 0;
+}
+
+.sect-card p {
+    color: #E6E6FA;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.sect-bonus {
+    color: #90EE90;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.sect-info {
+    padding: 15px;
+}
+
+.sect-header {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.sect-header .sect-icon {
+    font-size: 48px;
+    margin-right: 20px;
+}
+
+.sect-header h4 {
+    color: #FFD700;
+    margin: 0 0 5px 0;
+}
+
+.sect-header p {
+    color: #E6E6FA;
+    margin: 2px 0;
+}
+
+.sect-tasks h5 {
+    color: #FFD700;
+    margin-bottom: 15px;
+}
+
+.task-card {
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.task-card h6 {
+    color: #FFD700;
+    margin: 0 0 5px 0;
+}
+
+.task-card p {
+    color: #E6E6FA;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+}
+
+.task-reward {
+    color: #90EE90;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.task-btn {
+    background: linear-gradient(135deg, #8B4513, #CD853F);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+}
+
+.task-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #CD853F, #DEB887);
+    transform: translateY(-1px);
+}
+
+.task-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 炼丹系统 */
+.alchemy-container {
+    padding: 15px;
+}
+
+.alchemy-furnace {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.furnace-status {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.furnace-active {
+    color: #FF6B6B;
+}
+
+.fire-animation {
+    font-size: 48px;
+    animation: flicker 1s infinite alternate;
+}
+
+@keyframes flicker {
+    0% { opacity: 0.8; transform: scale(1); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+.furnace-idle {
+    color: #999;
+}
+
+.furnace-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.recipe-selection h5 {
+    color: #FFD700;
+    margin-bottom: 15px;
+}
+
+.recipes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.recipe-card {
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0.5;
+}
+
+.recipe-card.available {
+    opacity: 1;
+}
+
+.recipe-card.available:hover {
+    background: rgba(139, 69, 19, 0.2);
+    border-color: #CD853F;
+    transform: translateY(-2px);
+}
+
+.recipe-icon {
+    font-size: 32px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.recipe-card h6 {
+    color: #FFD700;
+    margin: 0 0 10px 0;
+    text-align: center;
+}
+
+.recipe-materials {
+    margin-bottom: 10px;
+}
+
+.material {
+    color: #E6E6FA;
+    font-size: 12px;
+    margin-bottom: 2px;
+}
+
+.recipe-result {
+    color: #90EE90;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* 装备强化系统 */
+.enhance-container {
+    padding: 15px;
+}
+
+.enhance-area {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.equipment-slot h5 {
+    color: #FFD700;
+    margin-bottom: 15px;
+}
+
+.equipment-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.equipment-card {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.equipment-card:hover {
+    background: rgba(139, 69, 19, 0.2);
+    border-color: #CD853F;
+}
+
+.equipment-card.selected {
+    border-color: #FFD700;
+    background: rgba(255, 215, 0, 0.1);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.equipment-icon {
+    font-size: 32px;
+    margin-right: 15px;
+    min-width: 40px;
+    text-align: center;
+}
+
+.equipment-info {
+    flex: 1;
+}
+
+.equipment-info h6 {
+    color: #FFD700;
+    margin: 0 0 5px 0;
+}
+
+.equipment-info p {
+    color: #E6E6FA;
+    margin: 0 0 5px 0;
+    font-size: 14px;
+}
+
+.equipment-stats {
+    font-size: 12px;
+    color: #90EE90;
+}
+
+.enhancement-panel {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #8B4513;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.enhancement-panel h5 {
+    color: #FFD700;
+    margin: 0 0 15px 0;
+    text-align: center;
+}
+
+.enhancement-info {
+    margin-bottom: 15px;
+}
+
+.enhancement-info p {
+    color: #E6E6FA;
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+.enhancement-preview {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.enhancement-preview h6 {
+    color: #FFD700;
+    margin: 0 0 10px 0;
+}
+
+.stat-preview {
+    color: #90EE90;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.enhance-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #8B4513, #CD853F);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.enhance-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #CD853F, #DEB887);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 69, 19, 0.3);
+}
+
+.enhance-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* 通知系统 */

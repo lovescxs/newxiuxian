@@ -232,6 +232,81 @@
                             ></div>
                         </div>
                     </div>
+                    
+                    <!-- 成就面板 -->
+                    <div v-if="activeLeftTab === 'achievements'" class="tab-content">
+                        <div class="achievements-list">
+                            <div 
+                                v-for="achievement in achievements" 
+                                :key="achievement.id"
+                                :class="['achievement-card', { completed: achievement.completed }]"
+                            >
+                                <div class="achievement-icon">{{ achievement.icon }}</div>
+                                <div class="achievement-info">
+                                    <h4>{{ achievement.name }}</h4>
+                                    <p>{{ achievement.description }}</p>
+                                    <div class="achievement-progress">
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" :style="{ width: Math.min(100, (achievement.current / achievement.target) * 100) + '%' }"></div>
+                                        </div>
+                                        <span class="progress-text">{{ achievement.current }}/{{ achievement.target }}</span>
+                                    </div>
+                                    <div v-if="achievement.completed" class="achievement-reward">奖励: {{ achievement.reward }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 宗门面板 -->
+                    <div v-if="activeLeftTab === 'sect'" class="tab-content">
+                        <div v-if="!player.sect" class="sect-selection">
+                            <h4>选择宗门</h4>
+                            <div class="sects-grid">
+                                <div 
+                                    v-for="sect in availableSects" 
+                                    :key="sect.id"
+                                    class="sect-card"
+                                    @click="joinSect(sect.id)"
+                                >
+                                    <div class="sect-icon">{{ sect.icon }}</div>
+                                    <h5>{{ sect.name }}</h5>
+                                    <p>{{ sect.description }}</p>
+                                    <div class="sect-bonus">特色: {{ sect.bonus }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div v-if="player.sect" class="sect-info">
+                            <div class="sect-header">
+                                <div class="sect-icon">{{ getSectInfo().icon }}</div>
+                                <div>
+                                    <h4>{{ getSectInfo().name }}</h4>
+                                    <p>贡献度: {{ player.sectContribution }}</p>
+                                    <p>等级: {{ player.sectLevel }}</p>
+                                </div>
+                            </div>
+                            
+                            <div class="sect-tasks">
+                                <h5>宗门任务</h5>
+                                <div 
+                                    v-for="task in sectTasks" 
+                                    :key="task.id"
+                                    class="task-card"
+                                >
+                                    <h6>{{ task.name }}</h6>
+                                    <p>{{ task.description }}</p>
+                                    <div class="task-reward">奖励: {{ task.reward }}</div>
+                                    <button 
+                                        @click="acceptTask(task.id)"
+                                        :disabled="task.accepted || !task.available"
+                                        class="task-btn"
+                                    >
+                                        {{ task.accepted ? '已接受' : '接受任务' }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
                 
                 <!-- 中央内容区 -->
@@ -374,14 +449,131 @@
                 
                 <!-- 右侧面板 -->
                 <aside class="right-panel">
-                    <div class="panel-header">
-                        <h4>📜 游戏日志</h4>
-                        <button @click="clearLog" class="clear-btn">清空</button>
+                    <div class="panel-tabs">
+                        <button 
+                            v-for="tab in rightTabs" 
+                            :key="tab.id"
+                            :class="['tab-btn', { active: activeRightTab === tab.id }]"
+                            @click="activeRightTab = tab.id"
+                        >
+                            {{ tab.icon }} {{ tab.name }}
+                        </button>
                     </div>
-                    <div class="game-log">
-                        <div v-for="(entry, index) in gameLog" :key="index" class="log-entry">
-                            <span class="log-time">{{ entry.time }}</span>
-                            <span class="log-message">{{ entry.message }}</span>
+                    <!-- 游戏日志面板 -->
+                    <div v-if="activeRightTab === 'log'" class="tab-content">
+                        <div class="panel-header">
+                            <h4>📜 游戏日志</h4>
+                        </div>
+                        <div class="game-log">
+                            <div 
+                                v-for="(log, index) in gameLogs" 
+                                :key="index"
+                                :class="['log-entry', log.type]"
+                            >
+                                <span class="log-time">{{ log.time }}</span>
+                                <span class="log-message">{{ log.message }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 炼丹面板 -->
+                    <div v-if="activeRightTab === 'alchemy'" class="tab-content">
+                        <div class="alchemy-container">
+                            <h4>🧪 炼丹炉</h4>
+                            
+                            <div class="alchemy-furnace">
+                                <div class="furnace-status">
+                                    <div v-if="alchemyInProgress" class="furnace-active">
+                                        <div class="fire-animation">🔥</div>
+                                        <p>炼制中... {{ alchemyTimeLeft }}秒</p>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" :style="{ width: ((alchemyDuration - alchemyTimeLeft) / alchemyDuration) * 100 + '%' }"></div>
+                                        </div>
+                                    </div>
+                                    <div v-else class="furnace-idle">
+                                        <div class="furnace-icon">⚗️</div>
+                                        <p>炼丹炉空闲中</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="recipe-selection">
+                                    <h5>选择丹方</h5>
+                                    <div class="recipes-grid">
+                                        <div 
+                                            v-for="recipe in alchemyRecipes" 
+                                            :key="recipe.id"
+                                            :class="['recipe-card', { available: canCraftRecipe(recipe) }]"
+                                            @click="startAlchemy(recipe)"
+                                        >
+                                            <div class="recipe-icon">{{ recipe.icon }}</div>
+                                            <h6>{{ recipe.name }}</h6>
+                                            <div class="recipe-materials">
+                                                <div v-for="material in recipe.materials" :key="material.name" class="material">
+                                                    {{ material.name }} x{{ material.count }}
+                                                </div>
+                                            </div>
+                                            <div class="recipe-result">产出: {{ recipe.result }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 装备强化面板 -->
+                    <div v-if="activeRightTab === 'enhance'" class="tab-content">
+                        <div class="enhance-container">
+                            <h4>⚒️ 装备强化</h4>
+                            
+                            <div class="enhance-area">
+                                <div class="equipment-slot">
+                                    <h5>选择装备</h5>
+                                    <div class="equipment-grid">
+                                        <div 
+                                            v-for="equipment in getEnhanceableEquipment()" 
+                                            :key="equipment.id"
+                                            :class="['equipment-card', { selected: selectedEquipment?.id === equipment.id }]"
+                                            @click="selectEquipment(equipment)"
+                                        >
+                                            <div class="equipment-icon">{{ equipment.icon }}</div>
+                                            <div class="equipment-info">
+                                                <h6>{{ equipment.name }}</h6>
+                                                <p>+{{ equipment.level || 0 }}</p>
+                                                <div class="equipment-stats">
+                                                    <div v-for="(value, stat) in equipment.stats" :key="stat">
+                                                        {{ stat }}: +{{ value }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div v-if="selectedEquipment" class="enhancement-panel">
+                                    <h5>强化 {{ selectedEquipment.name }}</h5>
+                                    <div class="enhancement-info">
+                                        <p>当前等级: +{{ selectedEquipment.level || 0 }}</p>
+                                        <p>成功率: {{ getEnhanceSuccessRate(selectedEquipment) }}%</p>
+                                        <p>所需材料: 强化石 x{{ getEnhanceCost(selectedEquipment) }}</p>
+                                        <p>所需金币: {{ getEnhanceGoldCost(selectedEquipment) }}</p>
+                                    </div>
+                                    
+                                    <div class="enhancement-preview">
+                                        <h6>强化后属性预览:</h6>
+                                        <div v-for="(value, stat) in getEnhancedStats(selectedEquipment)" :key="stat" class="stat-preview">
+                                            {{ stat }}: +{{ selectedEquipment.stats[stat] }} → +{{ value }}
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        @click="enhanceEquipment(selectedEquipment)"
+                                        :disabled="!canEnhanceEquipment(selectedEquipment)"
+                                        class="enhance-btn"
+                                    >
+                                        强化装备
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </aside>

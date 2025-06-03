@@ -32,11 +32,14 @@
 curl -fsSL https://raw.githubusercontent.com/your-username/cultivation-game/main/install.sh | bash
 ```
 
-### 方法二：Docker Hub部署
+### 方法二：Docker Hub部署（自动构建）
 
 ```bash
-# 使用预构建镜像
-curl -fsSL https://your-domain.com/docker-hub-install.sh | bash
+# 使用GitHub Actions自动构建的镜像
+docker run -d -p 8080:80 your-dockerhub-username/cultivation-game:latest
+
+# 或使用一键安装脚本
+curl -fsSL https://raw.githubusercontent.com/your-username/cultivation-game/main/docker-hub-install.sh | bash
 ```
 
 ### 方法三：网页安装器

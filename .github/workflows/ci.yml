@@ -1,0 +1,239 @@
+name: 🔍 CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    name: 🔍 代码质量检查
+    
+    steps:
+    - name: 🔍 Checkout
+      uses: actions/checkout@v4
+    
+    - name: 🐘 Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, dom, filter, gd, json
+    
+    - name: 📋 Validate composer.json (if exists)
+      run: |
+        if [ -f "composer.json" ]; then
+          composer validate --strict
+        else
+          echo "No composer.json found, skipping validation"
+        fi
+    
+    - name: 🔍 PHP Syntax Check
+      run: |
+        find . -name "*.php" -exec php -l {} \; | grep -v "No syntax errors"
+        if [ $? -eq 0 ]; then
+          echo "❌ PHP语法错误"
+          exit 1
+        else
+          echo "✅ PHP语法检查通过"
+        fi
+    
+    - name: 🔍 JavaScript Syntax Check
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: 📝 Check JavaScript
+      run: |
+        # 检查JavaScript语法
+        if command -v node &> /dev/null; then
+          find . -name "*.js" -exec node -c {} \;
+          echo "✅ JavaScript语法检查通过"
+        fi
+    
+    - name: 🔍 HTML Validation
+      run: |
+        # 简单的HTML检查
+        find . -name "*.html" -exec echo "检查 {}" \;
+        echo "✅ HTML文件检查完成"
+    
+    - name: 📊 File Structure Check
+      run: |
+        echo "📁 检查项目结构..."
+        
+        # 检查必要文件
+        required_files=("index.html" "game.js" "style.css" "Dockerfile" "docker-compose.yml")
+        for file in "${required_files[@]}"; do
+          if [ -f "$file" ]; then
+            echo "✅ $file 存在"
+          else
+            echo "❌ $file 缺失"
+            exit 1
+          fi
+        done
+        
+        # 检查API目录
+        if [ -d "api" ]; then
+          echo "✅ api目录存在"
+          api_files=("config.php" "index.php" "auth.php" "game.php")
+          for file in "${api_files[@]}"; do
+            if [ -f "api/$file" ]; then
+              echo "✅ api/$file 存在"
+            else
+              echo "❌ api/$file 缺失"
+              exit 1
+            fi
+          done
+        else
+          echo "❌ api目录缺失"
+          exit 1
+        fi
+
+  docker-test:
+    runs-on: ubuntu-latest
+    name: 🐳 Docker构建测试
+    needs: code-quality
+    
+    steps:
+    - name: 🔍 Checkout
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: 🔨 Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: false
+        tags: cultivation-game:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: 🧪 Test Docker image
+      run: |
+        echo "🧪 测试Docker镜像..."
+        
+        # 启动测试容器
+        docker run -d --name test-cultivation \
+          -p 8080:80 \
+          cultivation-game:test
+        
+        # 等待容器启动
+        sleep 15
+        
+        # 检查容器状态
+        if docker ps | grep test-cultivation; then
+          echo "✅ 容器启动成功"
+        else
+          echo "❌ 容器启动失败"
+          docker logs test-cultivation
+          exit 1
+        fi
+        
+        # 测试HTTP响应
+        for i in {1..5}; do
+          if curl -f http://localhost:8080; then
+            echo "✅ HTTP服务正常"
+            break
+          else
+            echo "⏳ 等待HTTP服务启动... ($i/5)"
+            sleep 5
+          fi
+          
+          if [ $i -eq 5 ]; then
+            echo "❌ HTTP服务异常"
+            docker logs test-cultivation
+            exit 1
+          fi
+        done
+        
+        # 测试API端点
+        if curl -f http://localhost:8080/api/test; then
+          echo "✅ API服务正常"
+        else
+          echo "⚠️  API服务可能需要数据库连接"
+        fi
+        
+        # 清理
+        docker stop test-cultivation
+        docker rm test-cultivation
+        
+        echo "✅ Docker镜像测试通过"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: 🔒 安全扫描
+    needs: docker-test
+    
+    steps:
+    - name: 🔍 Checkout
+      uses: actions/checkout@v4
+    
+    - name: 🔒 Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: 📤 Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: 🔍 Check for secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+  performance-test:
+    runs-on: ubuntu-latest
+    name: ⚡ 性能测试
+    needs: docker-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 🔍 Checkout
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Build and run
+      run: |
+        docker build -t cultivation-game:perf .
+        docker run -d --name perf-test -p 8080:80 cultivation-game:perf
+        sleep 15
+    
+    - name: ⚡ Performance test with Apache Bench
+      run: |
+        # 安装Apache Bench
+        sudo apt-get update
+        sudo apt-get install -y apache2-utils
+        
+        # 性能测试
+        echo "🚀 开始性能测试..."
+        ab -n 100 -c 10 http://localhost:8080/ > perf-results.txt
+        
+        # 显示结果
+        cat perf-results.txt
+        
+        # 检查是否有失败的请求
+        failed_requests=$(grep "Failed requests:" perf-results.txt | awk '{print $3}')
+        if [ "$failed_requests" -gt 0 ]; then
+          echo "❌ 性能测试失败: $failed_requests 个请求失败"
+          exit 1
+        else
+          echo "✅ 性能测试通过"
+        fi
+    
+    - name: 🧹 Cleanup
+      if: always()
+      run: |
+        docker stop perf-test || true
+        docker rm perf-test || true

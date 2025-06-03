@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page</title>
+</head>
+<body>
+    <h1>Static HTML Test</h1>
+    <p>If you can see this, static files are working.</p>
+    <p>Current time: <script>document.write(new Date());</script></p>
+    
+    <h2>API Test</h2>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+    
+    <script>
+    function testAPI() {
+        fetch('/api/test')
+            .then(response => {
+                document.getElementById('result').innerHTML = 
+                    'Status: ' + response.status + '<br>' +
+                    'Response: ' + (response.ok ? 'OK' : 'Error');
+                return response.text();
+            })
+            .then(data => {
+                document.getElementById('result').innerHTML += '<br>Data: ' + data;
+            })
+            .catch(error => {
+                document.getElementById('result').innerHTML = 'Error: ' + error;
+            });
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修仙世界游戏 - 在线安装器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .installer {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 90%;
+            border: 2px solid #ffd700;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #ffd700;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #ccc;
+            font-size: 1.1em;
+        }
+
+        .install-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .install-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .install-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px);
+        }
+
+        .install-card h3 {
+            color: #ffd700;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .install-card p {
+            color: #ccc;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .install-btn {
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .install-btn:hover {
+            background: linear-gradient(45deg, #ffed4e, #fff176);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .command-box {
+            background: #1a1a1a;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #ffd700;
+            font-family: 'Courier New', monospace;
+            position: relative;
+        }
+
+        .command-box code {
+            color: #00ff00;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ffd700;
+            color: #1a1a2e;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8em;
+        }
+
+        .requirements {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .requirements h4 {
+            color: #ffd700;
+            margin-bottom: 15px;
+        }
+
+        .requirements ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .requirements li {
+            color: #ccc;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .requirements li:before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            margin: 50px auto;
+            border: 2px solid #ffd700;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffd700;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="installer">
+        <div class="header">
+            <h1>🏮 修仙世界游戏</h1>
+            <p>一键安装部署，开始你的修仙之旅</p>
+        </div>
+
+        <div class="install-options">
+            <div class="install-card">
+                <h3>🚀 快速安装</h3>
+                <p>适合Linux/macOS用户，一条命令完成所有配置</p>
+                <button class="install-btn" onclick="showQuickInstall()">
+                    快速安装
+                </button>
+            </div>
+
+            <div class="install-card">
+                <h3>🐳 Docker Hub</h3>
+                <p>使用预构建镜像，更快的部署速度</p>
+                <button class="install-btn" onclick="showDockerInstall()">
+                    Docker安装
+                </button>
+            </div>
+
+            <div class="install-card">
+                <h3>📦 手动下载</h3>
+                <p>下载完整包，自定义配置和部署</p>
+                <button class="install-btn" onclick="showManualInstall()">
+                    手动安装
+                </button>
+            </div>
+        </div>
+
+        <div class="requirements">
+            <h4>📋 系统要求</h4>
+            <ul>
+                <li>Docker 20.10+</li>
+                <li>Docker Compose 2.0+</li>
+                <li>2GB+ 内存</li>
+                <li>5GB+ 磁盘空间</li>
+                <li>Linux/macOS/Windows (WSL2)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 快速安装模态框 -->
+    <div id="quickInstallModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('quickInstallModal')">&times;</span>
+            <h3>🚀 快速安装</h3>
+            <p>复制以下命令到终端执行：</p>
+            <div class="command-box">
+                <button class="copy-btn" onclick="copyCommand('quickCmd')">复制</button>
+                <code id="quickCmd">curl -fsSL https://raw.githubusercontent.com/your-username/cultivation-game/main/install.sh | bash</code>
+            </div>
+            <p><strong>或者分步执行：</strong></p>
+            <div class="command-box">
+                <button class="copy-btn" onclick="copyCommand('stepCmd')">复制</button>
+                <code id="stepCmd">
+# 1. 下载安装脚本
+wget https://raw.githubusercontent.com/your-username/cultivation-game/main/install.sh
+
+# 2. 添加执行权限
+chmod +x install.sh
+
+# 3. 运行安装
+./install.sh
+                </code>
+            </div>
+        </div>
+    </div>
+
+    <!-- Docker安装模态框 -->
+    <div id="dockerInstallModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('dockerInstallModal')">&times;</span>
+            <h3>🐳 Docker Hub安装</h3>
+            <p>使用预构建的Docker镜像：</p>
+            <div class="command-box">
+                <button class="copy-btn" onclick="copyCommand('dockerCmd')">复制</button>
+                <code id="dockerCmd">curl -fsSL https://your-domain.com/docker-hub-install.sh | bash</code>
+            </div>
+            <p><strong>或者手动执行：</strong></p>
+            <div class="command-box">
+                <button class="copy-btn" onclick="copyCommand('manualDockerCmd')">复制</button>
+                <code id="manualDockerCmd">
+# 1. 创建工作目录
+mkdir cultivation-game && cd cultivation-game
+
+# 2. 下载配置文件
+wget https://raw.githubusercontent.com/your-username/cultivation-game/main/docker-compose.yml
+
+# 3. 启动服务
+docker-compose up -d
+                </code>
+            </div>
+        </div>
+    </div>
+
+    <!-- 手动安装模态框 -->
+    <div id="manualInstallModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('manualInstallModal')">&times;</span>
+            <h3>📦 手动安装</h3>
+            <p>下载完整安装包：</p>
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="https://github.com/your-username/cultivation-game/releases/latest/download/cultivation-game.tar.gz" 
+                   style="background: #ffd700; color: #1a1a2e; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin: 10px;">
+                    下载 .tar.gz
+                </a>
+                <a href="https://github.com/your-username/cultivation-game/releases/latest/download/cultivation-game.zip" 
+                   style="background: #ffd700; color: #1a1a2e; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin: 10px;">
+                    下载 .zip
+                </a>
+            </div>
+            <p><strong>安装步骤：</strong></p>
+            <div class="command-box">
+                <code>
+# 1. 解压文件
+tar -xzf cultivation-game.tar.gz
+# 或者: unzip cultivation-game.zip
+
+# 2. 进入目录
+cd cultivation-game
+
+# 3. 配置环境变量
+cp .env.example .env
+nano .env  # 修改配置
+
+# 4. 启动服务
+docker-compose up -d --build
+                </code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showQuickInstall() {
+            document.getElementById('quickInstallModal').style.display = 'block';
+        }
+
+        function showDockerInstall() {
+            document.getElementById('dockerInstallModal').style.display = 'block';
+        }
+
+        function showManualInstall() {
+            document.getElementById('manualInstallModal').style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function copyCommand(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            navigator.clipboard.writeText(text).then(function() {
+                alert('命令已复制到剪贴板！');
+            }, function(err) {
+                console.error('复制失败: ', err);
+            });
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

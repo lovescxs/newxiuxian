@@ -1,6 +1,40 @@
 // Vue 3 修仙游戏应用
 const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 
+// API配置
+const API_BASE_URL = window.location.origin + '/api';
+let authToken = localStorage.getItem('auth_token') || '';
+
+// API请求工具函数
+const apiRequest = async (endpoint, options = {}) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const config = {
+        headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+        },
+        ...options
+    };
+    
+    if (config.body && typeof config.body === 'object') {
+        config.body = JSON.stringify(config.body);
+    }
+    
+    try {
+        const response = await fetch(url, config);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || '请求失败');
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('API请求错误:', error);
+        throw error;
+    }
+};
+
 createApp({
     setup() {
         // 响应式数据
@@ -24,6 +58,37 @@ createApp({
         const alchemyTimeLeft = ref(0);
         const alchemyDuration = ref(0);
         const selectedEquipment = ref(null);
+
+        // 自动修炼状态
+        const autoCultivationActive = ref(false);
+        const autoCultivationType = ref('');
+        const autoCultivationStartTime = ref(null);
+        const offlineProgress = ref(null);
+        const showOfflineModal = ref(false);
+
+        // 任务系统状态
+        const availableQuests = ref([]);
+        const activeQuests = ref([]);
+        const completedQuests = ref([]);
+        const questProgress = ref({});
+        
+        // 聊天和管理功能
+        const chatMessages = ref([]);
+        const chatInput = ref('');
+        const isAdmin = ref(false);
+        const allUsers = ref([]);
+        const adminAnnouncement = ref('');
+        const onlineUsers = ref(1);
+        const totalUsers = ref(1);
+        const totalMessages = ref(0);
+        
+        // 排行榜功能
+        const activeLeaderboardTab = ref('level');
+        const leaderboardTabs = [
+            { id: 'level', name: '等级榜' },
+            { id: 'gold', name: '财富榜' },
+            { id: 'battle', name: '战力榜' }
+        ];
         
         // 界面状态
         const activeLeftTab = ref('cultivation');
@@ -80,13 +145,20 @@ createApp({
             sectLevel: 1
         });
         
+        // 界面状态
+        const activeQuestTab = ref('available');
+
         // 游戏数据
         const leftTabs = [
             { id: 'cultivation', name: '修炼', icon: '🧘' },
             { id: 'skills', name: '技能', icon: '⚡' },
             { id: 'inventory', name: '背包', icon: '🎒' },
+            { id: 'quests', name: '任务', icon: '📋' },
             { id: 'achievements', name: '成就', icon: '🏆' },
-            { id: 'sect', name: '宗门', icon: '🏛️' }
+            { id: 'sect', name: '宗门', icon: '🏛️' },
+            { id: 'leaderboard', name: '排行榜', icon: '🏅' },
+            { id: 'chat', name: '江湖', icon: '💬' },
+            { id: 'admin', name: '管理', icon: '🛡️' }
         ];
         
         const centerTabs = [
@@ -370,20 +442,33 @@ createApp({
             }
             
             try {
-                // 模拟登录验证
-                const users = JSON.parse(localStorage.getItem('cultivationUsers') || '{}');
-                const user = users[authForm.username];
+                const response = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: {
+                        username: authForm.username,
+                        password: authForm.password
+                    }
+                });
                 
-                if (!user || user.password !== authForm.password) {
-                    authError.value = '用户名或密码错误';
-                    return;
-                }
+                // 保存认证令牌
+                authToken = response.token;
+                localStorage.setItem('auth_token', authToken);
                 
-                currentUser.value = { username: authForm.username };
+                // 设置用户信息
+                currentUser.value = response.user;
                 isLoggedIn.value = true;
+                isAdmin.value = response.user.is_admin;
                 
-                // 加载用户游戏数据
-                loadGameData();
+                // 加载游戏数据
+                await loadGameData();
+                
+                // 加载聊天记录
+                await loadChatMessages();
+                
+                // 加载用户列表（管理员）
+                if (isAdmin.value) {
+                    await loadAllUsers();
+                }
                 
                 showNotification('登录成功！欢迎回到修仙世界！', 'success');
                 addLogEntry('成功登录游戏');
@@ -393,7 +478,7 @@ createApp({
                 authForm.password = '';
                 
             } catch (error) {
-                authError.value = '登录失败，请重试';
+                authError.value = error.message || '登录失败，请重试';
             }
         };
         
@@ -416,20 +501,13 @@ createApp({
             }
             
             try {
-                const users = JSON.parse(localStorage.getItem('cultivationUsers') || '{}');
-                
-                if (users[authForm.username]) {
-                    authError.value = '用户名已存在';
-                    return;
-                }
-                
-                // 保存新用户
-                users[authForm.username] = {
-                    password: authForm.password,
-                    createdAt: new Date().toISOString()
-                };
-                
-                localStorage.setItem('cultivationUsers', JSON.stringify(users));
+                await apiRequest('/auth/register', {
+                    method: 'POST',
+                    body: {
+                        username: authForm.username,
+                        password: authForm.password
+                    }
+                });
                 
                 showNotification('注册成功！请登录开始游戏', 'success');
                 authMode.value = 'login';
@@ -440,13 +518,28 @@ createApp({
                 authForm.confirmPassword = '';
                 
             } catch (error) {
-                authError.value = '注册失败，请重试';
+                authError.value = error.message || '注册失败，请重试';
             }
         };
         
-        const logout = () => {
-            // 保存游戏数据
-            saveGame();
+        const logout = async () => {
+            try {
+                // 保存游戏数据
+                await saveGame();
+                
+                // 调用API登出
+                if (authToken) {
+                    await apiRequest('/auth/logout', {
+                        method: 'POST'
+                    });
+                }
+            } catch (error) {
+                console.error('登出API调用失败:', error);
+            }
+            
+            // 清理本地状态
+            authToken = '';
+            localStorage.removeItem('auth_token');
             
             // 清理定时器
             if (cultivationTimer) clearInterval(cultivationTimer);
@@ -458,12 +551,13 @@ createApp({
             currentUser.value = null;
             isCultivating.value = false;
             inBattle.value = false;
+            isAdmin.value = false;
             
             showNotification('已安全退出游戏', 'info');
         };
         
         // 数据保存和加载
-        const saveGame = () => {
+        const saveGame = async () => {
             if (!currentUser.value) return;
             
             saving.value = true;
@@ -475,28 +569,32 @@ createApp({
                     lastSaved: new Date().toISOString()
                 };
                 
-                const saveKey = `cultivationGame_${currentUser.value.username}`;
-                localStorage.setItem(saveKey, JSON.stringify(gameData));
+                await apiRequest('/game/save', {
+                    method: 'POST',
+                    body: gameData
+                });
                 
                 showNotification('游戏数据保存成功！', 'success');
                 addLogEntry('游戏数据已保存');
                 
             } catch (error) {
+                console.error('保存游戏数据失败:', error);
                 showNotification('保存失败，请重试', 'error');
             } finally {
                 saving.value = false;
             }
         };
         
-        const loadGameData = () => {
+        const loadGameData = async () => {
             if (!currentUser.value) return;
             
             try {
-                const saveKey = `cultivationGame_${currentUser.value.username}`;
-                const savedData = localStorage.getItem(saveKey);
+                const response = await apiRequest('/game/data', {
+                    method: 'GET'
+                });
                 
-                if (savedData) {
-                    const gameData = JSON.parse(savedData);
+                if (response.data) {
+                    const gameData = response.data;
                     
                     // 恢复玩家数据
                     Object.assign(player, gameData.player);
@@ -511,6 +609,7 @@ createApp({
                 }
                 
             } catch (error) {
+                console.error('加载游戏数据失败:', error);
                 showNotification('数据加载失败，使用默认数据', 'warning');
                 addLogEntry('数据加载失败，使用默认数据开始游戏');
             }
@@ -540,7 +639,10 @@ createApp({
                 cultivationTime.value++;
                 player.exp += expPerSecond;
                 player.stats.cultivationTime++;
-                
+
+                // 更新任务进度
+                updateQuestProgress('cultivation', 1);
+
                 // 消耗灵石（阵法修炼）
                 if (type === 'formation' && Date.now() - lastCostTime >= 60000) {
                     if (player.spiritStones >= costPerMinute) {
@@ -552,7 +654,7 @@ createApp({
                         return;
                     }
                 }
-                
+
                 checkLevelUp();
             }, 1000);
             
@@ -601,7 +703,10 @@ createApp({
             
             // 更新成就
             updateAchievement('first_level', player.level);
-            
+
+            // 更新任务进度
+            updateQuestProgress('level_up', 1);
+
             // 检查境界突破
             checkRealmBreakthrough();
             
@@ -686,7 +791,10 @@ createApp({
             
             // 更新成就
             updateAchievement('treasure_hunter');
-            
+
+            // 更新任务进度
+            updateQuestProgress('exploration', 1);
+
             addLogEntry(`进入${location.name}探索...`);
             
             setTimeout(() => {
@@ -835,7 +943,10 @@ createApp({
             
             // 更新成就
             updateAchievement('monster_slayer');
-            
+
+            // 更新任务进度
+            updateQuestProgress('monster_kill', 1);
+
             // 掉落物品
             if (enemy.drops && enemy.drops.length > 0) {
                 const drop = enemy.drops[Math.floor(Math.random() * enemy.drops.length)];
@@ -1109,6 +1220,7 @@ createApp({
                 addLogEntry(`炼制${recipe.name}成功！`);
                 showNotification(`炼制${recipe.name}成功！`, 'success');
                 updateAchievement('alchemist');
+                updateQuestProgress('pill_craft', 1);
             } else {
                 addLogEntry(`炼制${recipe.name}失败了...`);
                 showNotification(`炼制${recipe.name}失败了...`, 'error');
@@ -1191,8 +1303,423 @@ createApp({
             saveGame();
         };
         
+        // 聊天功能
+        const sendMessage = async () => {
+            if (!chatInput.value.trim()) return;
+            
+            try {
+                await apiRequest('/chat/send', {
+                    method: 'POST',
+                    body: {
+                        content: chatInput.value.trim()
+                    }
+                });
+                
+                chatInput.value = '';
+                
+                // 重新加载聊天消息
+                await loadChatMessages();
+                
+                // 自动滚动到底部
+                setTimeout(() => {
+                    const chatContainer = document.querySelector('.chat-messages');
+                    if (chatContainer) {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                showNotification(error.message || '发送消息失败', 'error');
+            }
+        };
+        
+        const formatChatTime = (timestamp) => {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        };
+        
+        // saveChatMessages函数已移除，现在使用API保存聊天消息
+        
+        const loadChatMessages = async () => {
+            try {
+                const response = await apiRequest('/chat/messages', {
+                    method: 'GET'
+                });
+                
+                chatMessages.value = response.messages || [];
+                totalMessages.value = response.total || 0;
+                
+            } catch (error) {
+                console.error('加载聊天消息失败:', error);
+                chatMessages.value = [];
+                totalMessages.value = 0;
+            }
+        };
+        
+        // 排行榜功能
+        const getLeaderboardData = async () => {
+            try {
+                const response = await apiRequest(`/game/leaderboard?type=${activeLeaderboardTab.value}`, {
+                    method: 'GET'
+                });
+                
+                return response.leaderboard || [];
+                
+            } catch (error) {
+                console.error('获取排行榜数据失败:', error);
+                return [];
+            }
+        };
+        
+        const getLeaderboardValue = (player) => {
+            switch (activeLeaderboardTab.value) {
+                case 'level':
+                    return `${player.level || 1}级`;
+                case 'gold':
+                    return `${player.gold || 0}金币`;
+                case 'battle':
+                    return `${player.attack || 0}攻击力`;
+                default:
+                    return '';
+            }
+        };
+        
+        const getRankIcon = (rank) => {
+            switch (rank) {
+                case 1: return '🥇';
+                case 2: return '🥈';
+                case 3: return '🥉';
+                default: return '🏅';
+            }
+        };
+        
+        // getAllUsersData函数已移除，现在使用API获取用户数据
+        
+        // 管理员功能
+        const banUser = async (username) => {
+            if (!isAdmin.value) return;
+            
+            try {
+                await apiRequest('/admin/ban', {
+                    method: 'POST',
+                    body: { username }
+                });
+                
+                await loadAllUsers();
+                addLogEntry(`管理员封禁了用户: ${username}`);
+                showNotification(`用户 ${username} 已被封禁`, 'success');
+                
+            } catch (error) {
+                console.error('封禁用户失败:', error);
+                showNotification(error.message || '封禁用户失败', 'error');
+            }
+        };
+        
+        const unbanUser = async (username) => {
+            if (!isAdmin.value) return;
+            
+            try {
+                await apiRequest('/admin/unban', {
+                    method: 'POST',
+                    body: { username }
+                });
+                
+                await loadAllUsers();
+                addLogEntry(`管理员解封了用户: ${username}`);
+                showNotification(`用户 ${username} 已被解封`, 'success');
+                
+            } catch (error) {
+                console.error('解封用户失败:', error);
+                showNotification(error.message || '解封用户失败', 'error');
+            }
+        };
+        
+        const sendAnnouncement = async () => {
+            if (!isAdmin.value || !adminAnnouncement.value.trim()) return;
+            
+            try {
+                await apiRequest('/admin/announcement', {
+                    method: 'POST',
+                    body: {
+                        content: adminAnnouncement.value.trim()
+                    }
+                });
+                
+                adminAnnouncement.value = '';
+                await loadChatMessages();
+                showNotification('系统公告已发布', 'success');
+                
+            } catch (error) {
+                console.error('发布公告失败:', error);
+                showNotification(error.message || '发布公告失败', 'error');
+            }
+        };
+        
+        const clearChatHistory = async () => {
+            if (!isAdmin.value) return;
+            
+            try {
+                await apiRequest('/chat/clear', {
+                    method: 'POST'
+                });
+                
+                chatMessages.value = [];
+                totalMessages.value = 0;
+                showNotification('聊天记录已清空', 'success');
+                
+            } catch (error) {
+                console.error('清空聊天记录失败:', error);
+                showNotification(error.message || '清空聊天记录失败', 'error');
+            }
+        };
+        
+        const loadAllUsers = async () => {
+            try {
+                const response = await apiRequest('/admin/users', {
+                    method: 'GET'
+                });
+                
+                allUsers.value = response.users || [];
+                totalUsers.value = response.total || 0;
+                
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+                allUsers.value = [];
+                totalUsers.value = 0;
+            }
+        };
+        
+        // checkAdminStatus函数已移除，现在从API登录响应中获取管理员状态
+        
+        // 自动修炼系统函数
+        const checkAutoCultivationStatus = async () => {
+            try {
+                const response = await apiRequest('/cultivation/status', {
+                    method: 'GET'
+                });
+
+                if (response.active) {
+                    autoCultivationActive.value = true;
+                    autoCultivationType.value = response.cultivation.type;
+                    autoCultivationStartTime.value = response.cultivation.start_time;
+
+                    // 检查离线进度
+                    await checkOfflineProgress();
+                } else {
+                    autoCultivationActive.value = false;
+                }
+
+            } catch (error) {
+                console.error('检查自动修炼状态失败:', error);
+            }
+        };
+
+        const startAutoCultivation = async (type) => {
+            try {
+                const response = await apiRequest('/cultivation/start', {
+                    method: 'POST',
+                    body: { type }
+                });
+
+                autoCultivationActive.value = true;
+                autoCultivationType.value = type;
+                autoCultivationStartTime.value = new Date().toISOString();
+
+                showNotification(`${getCultivationTypeName(type)}自动修炼已开始`, 'success');
+                addLogEntry(`开始${getCultivationTypeName(type)}自动修炼`);
+
+            } catch (error) {
+                showNotification(error.message || '开始自动修炼失败', 'error');
+            }
+        };
+
+        const stopAutoCultivation = async () => {
+            try {
+                await apiRequest('/cultivation/stop', {
+                    method: 'POST'
+                });
+
+                autoCultivationActive.value = false;
+                autoCultivationType.value = '';
+                autoCultivationStartTime.value = null;
+
+                showNotification('自动修炼已停止', 'info');
+                addLogEntry('停止自动修炼');
+
+            } catch (error) {
+                showNotification(error.message || '停止自动修炼失败', 'error');
+            }
+        };
+
+        const checkOfflineProgress = async () => {
+            try {
+                const response = await apiRequest('/cultivation/calculate', {
+                    method: 'GET'
+                });
+
+                if (response.offline_progress && response.offline_progress.exp_gained > 0) {
+                    offlineProgress.value = response.offline_progress;
+                    showOfflineModal.value = true;
+                }
+
+            } catch (error) {
+                console.error('检查离线进度失败:', error);
+            }
+        };
+
+        const claimOfflineRewards = async () => {
+            try {
+                const response = await apiRequest('/cultivation/claim', {
+                    method: 'POST'
+                });
+
+                const rewards = response.rewards;
+                player.exp += rewards.exp_gained;
+
+                if (rewards.cost_type === 'spirit_stones') {
+                    player.spiritStones -= rewards.cost_paid;
+                } else {
+                    player.gold -= rewards.cost_paid;
+                }
+
+                showNotification(`离线修炼获得${rewards.exp_gained}经验`, 'success');
+                addLogEntry(`离线修炼${rewards.hours_cultivated.toFixed(1)}小时，获得${rewards.exp_gained}经验`);
+
+                checkLevelUp();
+                showOfflineModal.value = false;
+                offlineProgress.value = null;
+
+            } catch (error) {
+                showNotification(error.message || '领取离线奖励失败', 'error');
+            }
+        };
+
+        const getCultivationTypeName = (type) => {
+            const names = {
+                'meditation': '打坐冥想',
+                'formation': '阵法修炼',
+                'pill_assisted': '丹药辅助'
+            };
+            return names[type] || type;
+        };
+
+        // 任务系统函数
+        const loadQuests = async () => {
+            try {
+                const response = await apiRequest('/quests/available', {
+                    method: 'GET'
+                });
+
+                const quests = response.quests || [];
+                availableQuests.value = quests.filter(q => q.status === 'available');
+                activeQuests.value = quests.filter(q => q.status === 'accepted');
+                completedQuests.value = quests.filter(q => q.status === 'completed');
+
+            } catch (error) {
+                console.error('加载任务失败:', error);
+            }
+        };
+
+        const acceptQuest = async (questId) => {
+            try {
+                await apiRequest('/quests/accept', {
+                    method: 'POST',
+                    body: { quest_id: questId }
+                });
+
+                showNotification('任务接受成功', 'success');
+                await loadQuests();
+
+            } catch (error) {
+                showNotification(error.message || '接受任务失败', 'error');
+            }
+        };
+
+        const claimQuestReward = async (questId) => {
+            try {
+                const response = await apiRequest('/quests/claim', {
+                    method: 'POST',
+                    body: { quest_id: questId }
+                });
+
+                const rewards = response.rewards;
+                if (rewards.exp) player.exp += rewards.exp;
+                if (rewards.gold) player.gold += rewards.gold;
+                if (rewards.spirit_stones) player.spiritStones += rewards.spirit_stones;
+
+                showNotification('任务奖励已领取', 'success');
+                await loadQuests();
+                checkLevelUp();
+
+            } catch (error) {
+                showNotification(error.message || '领取任务奖励失败', 'error');
+            }
+        };
+
+        const updateQuestProgress = async (action, value = 1) => {
+            try {
+                await apiRequest('/quests/update', {
+                    method: 'POST',
+                    body: { action, value }
+                });
+
+                // 静默更新，不显示通知
+                await loadQuests();
+
+            } catch (error) {
+                console.error('更新任务进度失败:', error);
+            }
+        };
+
+        const getRequirementText = (key, value) => {
+            const texts = {
+                'cultivation_time': `修炼${Math.floor(value / 3600)}小时`,
+                'monsters_killed': `击败${value}只妖兽`,
+                'explorations': `完成${value}次探索`,
+                'level_ups': `提升${value}个等级`,
+                'pills_crafted': `炼制${value}颗丹药`
+            };
+            return texts[key] || `${key}: ${value}`;
+        };
+
+        // 自动登录检查
+        const checkAutoLogin = async () => {
+            if (authToken) {
+                try {
+                    const response = await apiRequest('/auth/verify', {
+                        method: 'GET'
+                    });
+
+                    if (response.user) {
+                        currentUser.value = response.user;
+                        isLoggedIn.value = true;
+                        isAdmin.value = response.user.is_admin;
+
+                        await loadGameData();
+                        await loadChatMessages();
+                        await checkAutoCultivationStatus();
+                        await loadQuests();
+
+                        if (isAdmin.value) {
+                            await loadAllUsers();
+                        }
+
+                        showNotification('自动登录成功', 'success');
+                    }
+                } catch (error) {
+                    console.error('自动登录失败:', error);
+                    authToken = '';
+                    localStorage.removeItem('auth_token');
+                }
+            }
+        };
+        
         // 生命周期
-        onMounted(() => {
+        onMounted(async () => {
+            // 检查自动登录
+            await checkAutoLogin();
+            
             // 定期恢复灵力
             mpRegenTimer = setInterval(() => {
                 if (player.mp < player.maxMp) {
@@ -1240,11 +1767,39 @@ createApp({
             alchemyTimeLeft,
             alchemyDuration,
             selectedEquipment,
+
+            // 自动修炼状态
+            autoCultivationActive,
+            autoCultivationType,
+            autoCultivationStartTime,
+            offlineProgress,
+            showOfflineModal,
+
+            // 任务系统状态
+            availableQuests,
+            activeQuests,
+            completedQuests,
+            questProgress,
+            
+            // 聊天和管理功能
+            chatMessages,
+            chatInput,
+            isAdmin,
+            allUsers,
+            adminAnnouncement,
+            onlineUsers,
+            totalUsers,
+            totalMessages,
+            
+            // 排行榜功能
+            activeLeaderboardTab,
+            leaderboardTabs,
             
             // 界面状态
             activeLeftTab,
             activeCenterTab,
             activeShopCategory,
+            activeQuestTab,
             
             // 表单数据
             authForm,
@@ -1284,13 +1839,28 @@ createApp({
             canCraftRecipe,
             startAlchemy,
             getEnhanceableEquipment,
-             selectEquipment,
-             getEnhanceSuccessRate,
-             getEnhanceCost,
-             getEnhanceGoldCost,
-             getEnhancedStats,
-             canEnhanceEquipment,
-             enhanceEquipment,
+            selectEquipment,
+            getEnhanceSuccessRate,
+            getEnhanceCost,
+            getEnhanceGoldCost,
+            getEnhancedStats,
+            canEnhanceEquipment,
+            enhanceEquipment,
+
+            // 自动修炼方法
+            checkAutoCultivationStatus,
+            startAutoCultivation,
+            stopAutoCultivation,
+            checkOfflineProgress,
+            claimOfflineRewards,
+            getCultivationTypeName,
+
+            // 任务系统方法
+            loadQuests,
+            acceptQuest,
+            claimQuestReward,
+            updateQuestProgress,
+            getRequirementText,
             
             // 工具方法
             formatTime,
@@ -1300,7 +1870,25 @@ createApp({
             getShopItems,
             getInventoryItems,
             getInventoryCount,
-            getItemIcon
+            getItemIcon,
+            
+            // 聊天和管理功能方法
+            sendMessage,
+            formatChatTime,
+            saveChatMessages,
+            loadChatMessages,
+            banUser,
+            unbanUser,
+            sendAnnouncement,
+            clearChatHistory,
+            loadAllUsers,
+            checkAdminStatus,
+            
+            // 排行榜功能方法
+            getLeaderboardData,
+            getLeaderboardValue,
+            getRankIcon,
+            getAllUsersData
         };
     }
 }).mount('#app');

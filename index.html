@@ -153,37 +153,91 @@
                     
                     <!-- 修炼面板 -->
                     <div v-if="activeLeftTab === 'cultivation'" class="tab-content">
-                        <div class="cultivation-methods">
-                            <div class="method-card">
-                                <h4>🧘 打坐冥想</h4>
-                                <p>基础修炼方式，稳定获得修为</p>
-                                <button 
-                                    @click="startCultivation('meditation')"
-                                    :disabled="isCultivating"
-                                    class="method-btn"
-                                >
-                                    {{ isCultivating && cultivationType === 'meditation' ? '修炼中...' : '开始修炼' }}
-                                </button>
+                        <!-- 手动修炼 -->
+                        <div class="cultivation-section">
+                            <h4>🔥 手动修炼</h4>
+                            <div class="cultivation-methods">
+                                <div class="method-card">
+                                    <h5>🧘 打坐冥想</h5>
+                                    <p>基础修炼方式，稳定获得修为</p>
+                                    <button
+                                        @click="startCultivation('meditation')"
+                                        :disabled="isCultivating"
+                                        class="method-btn"
+                                    >
+                                        {{ isCultivating && cultivationType === 'meditation' ? '修炼中...' : '开始修炼' }}
+                                    </button>
+                                </div>
+
+                                <div class="method-card">
+                                    <h5>⚡ 阵法修炼</h5>
+                                    <p>消耗灵石，快速提升修为</p>
+                                    <p class="cost">消耗：1灵石/分钟</p>
+                                    <button
+                                        @click="startCultivation('formation')"
+                                        :disabled="isCultivating || player.spiritStones < 1"
+                                        class="method-btn"
+                                    >
+                                        {{ isCultivating && cultivationType === 'formation' ? '修炼中...' : '开始修炼' }}
+                                    </button>
+                                </div>
                             </div>
-                            
-                            <div class="method-card">
-                                <h4>⚡ 阵法修炼</h4>
-                                <p>消耗灵石，快速提升修为</p>
-                                <p class="cost">消耗：1灵石/分钟</p>
-                                <button 
-                                    @click="startCultivation('formation')"
-                                    :disabled="isCultivating || player.spiritStones < 1"
-                                    class="method-btn"
-                                >
-                                    {{ isCultivating && cultivationType === 'formation' ? '修炼中...' : '开始修炼' }}
-                                </button>
+
+                            <div v-if="isCultivating" class="cultivation-timer">
+                                <h5>修炼进行中</h5>
+                                <div class="timer">{{ formatTime(cultivationTime) }}</div>
+                                <button @click="stopCultivation" class="stop-btn">停止修炼</button>
                             </div>
                         </div>
-                        
-                        <div v-if="isCultivating" class="cultivation-timer">
-                            <h4>修炼进行中</h4>
-                            <div class="timer">{{ formatTime(cultivationTime) }}</div>
-                            <button @click="stopCultivation" class="stop-btn">停止修炼</button>
+
+                        <!-- 自动修炼 -->
+                        <div class="cultivation-section">
+                            <h4>🤖 自动修炼</h4>
+                            <div v-if="!autoCultivationActive" class="auto-cultivation-setup">
+                                <p>选择自动修炼方式，离线时也能持续修炼</p>
+                                <div class="auto-methods">
+                                    <div class="auto-method-card">
+                                        <h5>🧘 自动打坐</h5>
+                                        <p>每小时60经验，无消耗</p>
+                                        <button @click="startAutoCultivation('meditation')" class="auto-btn">
+                                            开始自动修炼
+                                        </button>
+                                    </div>
+
+                                    <div class="auto-method-card">
+                                        <h5>⚡ 自动阵法</h5>
+                                        <p>每小时180经验，消耗10灵石/小时</p>
+                                        <button
+                                            @click="startAutoCultivation('formation')"
+                                            :disabled="player.spiritStones < 10"
+                                            class="auto-btn"
+                                        >
+                                            开始自动修炼
+                                        </button>
+                                    </div>
+
+                                    <div class="auto-method-card">
+                                        <h5>💊 丹药辅助</h5>
+                                        <p>每小时300经验，消耗50金币/小时</p>
+                                        <button
+                                            @click="startAutoCultivation('pill_assisted')"
+                                            :disabled="player.gold < 50"
+                                            class="auto-btn"
+                                        >
+                                            开始自动修炼
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="autoCultivationActive" class="auto-cultivation-status">
+                                <h5>{{ getCultivationTypeName(autoCultivationType) }}进行中</h5>
+                                <p>开始时间: {{ new Date(autoCultivationStartTime).toLocaleString() }}</p>
+                                <p>修炼类型: {{ getCultivationTypeName(autoCultivationType) }}</p>
+                                <button @click="stopAutoCultivation" class="stop-auto-btn">
+                                    停止自动修炼
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -233,11 +287,135 @@
                         </div>
                     </div>
                     
+                    <!-- 任务面板 -->
+                    <div v-if="activeLeftTab === 'quests'" class="tab-content">
+                        <div class="quest-tabs">
+                            <button
+                                :class="['quest-tab', { active: activeQuestTab === 'available' }]"
+                                @click="activeQuestTab = 'available'"
+                            >
+                                可接受 ({{ availableQuests.length }})
+                            </button>
+                            <button
+                                :class="['quest-tab', { active: activeQuestTab === 'active' }]"
+                                @click="activeQuestTab = 'active'"
+                            >
+                                进行中 ({{ activeQuests.length }})
+                            </button>
+                            <button
+                                :class="['quest-tab', { active: activeQuestTab === 'completed' }]"
+                                @click="activeQuestTab = 'completed'"
+                            >
+                                已完成 ({{ completedQuests.length }})
+                            </button>
+                        </div>
+
+                        <!-- 可接受任务 -->
+                        <div v-if="activeQuestTab === 'available'" class="quest-list">
+                            <div
+                                v-for="quest in availableQuests"
+                                :key="quest.id"
+                                class="quest-card available"
+                            >
+                                <div class="quest-header">
+                                    <h5>{{ quest.title }}</h5>
+                                    <span class="quest-type">{{ quest.quest_type }}</span>
+                                </div>
+                                <p class="quest-description">{{ quest.description }}</p>
+                                <div class="quest-requirements">
+                                    <h6>任务要求:</h6>
+                                    <ul>
+                                        <li v-for="(value, key) in quest.requirements" :key="key">
+                                            {{ getRequirementText(key, value) }}
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="quest-rewards">
+                                    <h6>任务奖励:</h6>
+                                    <div class="reward-items">
+                                        <span v-if="quest.rewards.exp" class="reward-item">
+                                            ⭐ {{ quest.rewards.exp }}经验
+                                        </span>
+                                        <span v-if="quest.rewards.gold" class="reward-item">
+                                            💰 {{ quest.rewards.gold }}金币
+                                        </span>
+                                        <span v-if="quest.rewards.spirit_stones" class="reward-item">
+                                            💎 {{ quest.rewards.spirit_stones }}灵石
+                                        </span>
+                                    </div>
+                                </div>
+                                <button @click="acceptQuest(quest.id)" class="quest-accept-btn">
+                                    接受任务
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 进行中任务 -->
+                        <div v-if="activeQuestTab === 'active'" class="quest-list">
+                            <div
+                                v-for="quest in activeQuests"
+                                :key="quest.id"
+                                class="quest-card active"
+                            >
+                                <div class="quest-header">
+                                    <h5>{{ quest.title }}</h5>
+                                    <span class="quest-type">{{ quest.quest_type }}</span>
+                                </div>
+                                <p class="quest-description">{{ quest.description }}</p>
+                                <div class="quest-progress">
+                                    <h6>进度:</h6>
+                                    <div v-for="(value, key) in quest.requirements" :key="key" class="progress-item">
+                                        <span>{{ getRequirementText(key, value) }}</span>
+                                        <div class="progress-bar">
+                                            <div
+                                                class="progress-fill"
+                                                :style="{ width: Math.min(100, ((quest.progress[key] || 0) / value) * 100) + '%' }"
+                                            ></div>
+                                        </div>
+                                        <span class="progress-text">{{ quest.progress[key] || 0 }}/{{ value }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 已完成任务 -->
+                        <div v-if="activeQuestTab === 'completed'" class="quest-list">
+                            <div
+                                v-for="quest in completedQuests"
+                                :key="quest.id"
+                                class="quest-card completed"
+                            >
+                                <div class="quest-header">
+                                    <h5>{{ quest.title }}</h5>
+                                    <span class="quest-type">{{ quest.quest_type }}</span>
+                                </div>
+                                <p class="quest-description">{{ quest.description }}</p>
+                                <div class="quest-rewards">
+                                    <h6>任务奖励:</h6>
+                                    <div class="reward-items">
+                                        <span v-if="quest.rewards.exp" class="reward-item">
+                                            ⭐ {{ quest.rewards.exp }}经验
+                                        </span>
+                                        <span v-if="quest.rewards.gold" class="reward-item">
+                                            💰 {{ quest.rewards.gold }}金币
+                                        </span>
+                                        <span v-if="quest.rewards.spirit_stones" class="reward-item">
+                                            💎 {{ quest.rewards.spirit_stones }}灵石
+                                        </span>
+                                    </div>
+                                </div>
+                                <button @click="claimQuestReward(quest.id)" class="quest-claim-btn">
+                                    领取奖励
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 成就面板 -->
                     <div v-if="activeLeftTab === 'achievements'" class="tab-content">
                         <div class="achievements-list">
-                            <div 
-                                v-for="achievement in achievements" 
+                            <div
+                                v-for="achievement in achievements"
                                 :key="achievement.id"
                                 :class="['achievement-card', { completed: achievement.completed }]"
                             >
@@ -304,6 +482,127 @@
                                         {{ task.accepted ? '已接受' : '接受任务' }}
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 排行榜面板 -->
+                    <div v-if="activeLeftTab === 'leaderboard'" class="tab-content">
+                        <div class="leaderboard-tabs">
+                            <button 
+                                v-for="tab in leaderboardTabs" 
+                                :key="tab.id"
+                                :class="['leaderboard-tab', { active: activeLeaderboardTab === tab.id }]"
+                                @click="activeLeaderboardTab = tab.id"
+                            >
+                                {{ tab.name }}
+                            </button>
+                        </div>
+                        
+                        <div class="leaderboard-content">
+                            <div class="leaderboard-list">
+                                <div 
+                                    v-for="(player, index) in getLeaderboardData()" 
+                                    :key="player.username"
+                                    :class="['leaderboard-item', { self: player.username === currentUser.username }]"
+                                >
+                                    <div class="rank">{{ index + 1 }}</div>
+                                    <div class="player-avatar">{{ getRankIcon(index + 1) }}</div>
+                                    <div class="player-name">{{ player.username }}</div>
+                                    <div class="player-value">{{ getLeaderboardValue(player) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 江湖聊天面板 -->
+                    <div v-if="activeLeftTab === 'chat'" class="tab-content">
+                        <div class="chat-container">
+                            <div class="chat-messages" ref="chatMessages">
+                                <div 
+                                    v-for="message in chatMessages" 
+                                    :key="message.id"
+                                    :class="['chat-message', { self: message.username === currentUser.username, admin: message.isAdmin }]"
+                                >
+                                    <div class="message-header">
+                                        <span class="username">{{ message.username }}</span>
+                                        <span v-if="message.isAdmin" class="admin-badge">管理员</span>
+                                        <span class="timestamp">{{ formatChatTime(message.timestamp) }}</span>
+                                    </div>
+                                    <div class="message-content">{{ message.content }}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="chat-input">
+                                <input 
+                                    v-model="chatInput" 
+                                    @keyup.enter="sendMessage"
+                                    placeholder="说点什么..."
+                                    maxlength="200"
+                                    class="chat-text-input"
+                                >
+                                <button @click="sendMessage" :disabled="!chatInput.trim()" class="send-btn">
+                                    发送
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 管理员面板 -->
+                    <div v-if="activeLeftTab === 'admin' && isAdmin" class="tab-content">
+                        <div class="admin-panel">
+                            <h4>🛡️ 管理员控制台</h4>
+                            
+                            <div class="admin-section">
+                                <h5>用户管理</h5>
+                                <div class="admin-users">
+                                    <div 
+                                        v-for="user in allUsers" 
+                                        :key="user.username"
+                                        class="admin-user-item"
+                                    >
+                                        <span class="user-name">{{ user.username }}</span>
+                                        <span class="user-level">等级: {{ user.level || 1 }}</span>
+                                        <div class="admin-actions">
+                                            <button @click="banUser(user.username)" :disabled="user.banned" class="ban-btn">
+                                                {{ user.banned ? '已封禁' : '封禁' }}
+                                            </button>
+                                            <button @click="unbanUser(user.username)" :disabled="!user.banned" class="unban-btn">
+                                                解封
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="admin-section">
+                                <h5>系统公告</h5>
+                                <textarea 
+                                    v-model="adminAnnouncement" 
+                                    placeholder="输入系统公告..."
+                                    class="admin-textarea"
+                                ></textarea>
+                                <button @click="sendAnnouncement" class="admin-btn">
+                                    发布公告
+                                </button>
+                            </div>
+                            
+                            <div class="admin-section">
+                                <h5>游戏数据</h5>
+                                <div class="admin-stats">
+                                    <div class="stat-item">
+                                        <span>在线用户: {{ onlineUsers }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>总注册用户: {{ totalUsers }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span>聊天消息数: {{ totalMessages }}</span>
+                                    </div>
+                                </div>
+                                <button @click="clearChatHistory" class="admin-btn danger">
+                                    清空聊天记录
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -580,10 +879,54 @@
             </main>
         </div>
         
+        <!-- 离线修炼奖励弹窗 -->
+        <div v-if="showOfflineModal" class="offline-modal-overlay">
+            <div class="offline-modal">
+                <div class="offline-header">
+                    <h3>🌙 离线修炼收获</h3>
+                    <p>欢迎回来！你在离线期间获得了以下收获：</p>
+                </div>
+
+                <div v-if="offlineProgress" class="offline-content">
+                    <div class="offline-stats">
+                        <div class="offline-stat">
+                            <span class="stat-icon">⏰</span>
+                            <span class="stat-label">修炼时间</span>
+                            <span class="stat-value">{{ offlineProgress.hours_cultivated.toFixed(1) }}小时</span>
+                        </div>
+
+                        <div class="offline-stat">
+                            <span class="stat-icon">⭐</span>
+                            <span class="stat-label">获得经验</span>
+                            <span class="stat-value">{{ offlineProgress.exp_gained }}</span>
+                        </div>
+
+                        <div v-if="offlineProgress.cost_paid > 0" class="offline-stat">
+                            <span class="stat-icon">💰</span>
+                            <span class="stat-label">消耗{{ offlineProgress.cost_type === 'spirit_stones' ? '灵石' : '金币' }}</span>
+                            <span class="stat-value">{{ offlineProgress.cost_paid }}</span>
+                        </div>
+
+                        <div class="offline-stat">
+                            <span class="stat-icon">🧘</span>
+                            <span class="stat-label">修炼方式</span>
+                            <span class="stat-value">{{ getCultivationTypeName(offlineProgress.cultivation_type) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="offline-actions">
+                        <button @click="claimOfflineRewards" class="claim-offline-btn">
+                            领取奖励
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 通知系统 -->
         <div class="notifications">
-            <div 
-                v-for="notification in notifications" 
+            <div
+                v-for="notification in notifications"
                 :key="notification.id"
                 :class="['notification', notification.type]"
             >
